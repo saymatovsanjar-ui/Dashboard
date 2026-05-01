@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CREflow Pro - Property & Tenant Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --bg: #0b1219;
+            --sidebar-bg: #111b26;
+            --card-bg: #162231;
+            --border: #1f3246;
+            --text: #e8edf3;
+            --text-secondary: #8fa3b8;
+            --accent: #3b82f6;
+            --accent-light: #60a5fa;
+            --green: #10b981;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --purple: #8b5cf6;
+            --teal: #14b8a6;
+            --pink: #ec4899;
+            --radius: 14px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        /* ── TOP BAR ── */
+        .top-bar {
+            background: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .top-bar .logo { font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+        .top-bar .logo i { color: var(--accent-light); }
+        .sync-badge {
+            font-size: 0.7rem;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        .sync-badge.online { background: rgba(16,185,129,0.15); color: var(--green); }
+        .sync-badge.offline { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .sync-badge.saving { background: rgba(59,130,246,0.15); color: var(--accent-light); }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            top: 49px; left: 0; bottom: 0;
+            z-index: 100;
+            transition: transform 0.25s;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-nav { padding: 14px 10px; flex: 1; }
+        .sidebar-nav .nav-section {
+            font-size: 0.66rem;
+            text-transform: uppercase;
+            letter-spacing: 1.3px;
+            color: var(--text-secondary);
+            padding: 14px 10px 6px;
+            font-weight: 700;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 9px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .sidebar-nav a:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+        .sidebar-nav a.active { background: rgba(59,130,246,0.15); color: var(--accent-light); font-weight: 600; }
+        .sidebar-nav a .badge {
+            margin-left: auto;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.65rem;
+            padding: 2px 9px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .sidebar-nav a .badge.warn { background: var(--amber); color: #000; }
+        .sidebar-nav a .badge.green { background: var(--green); color: #000; }
+        .sidebar-nav a .badge.red { background: var(--red); }
+        .sidebar-footer {
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .sidebar-footer button {
+            width: 100%;
+            padding: 7px 10px;
+            font-size: 0.68rem;
+            border-radius: 6px;
+            text-align: left;
+        }
+
+        /* ── MAIN ── */
+        .main {
+            margin-left: 260px;
+            margin-top: 49px;
+            padding: 24px 28px;
+            min-height: calc(100vh - 49px);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-2px); }
+        .stat-card .icon-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .stat-card .icon-circle {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .icon-circle.blue { background: rgba(59,130,246,0.2); color: var(--accent-light); }
+        .icon-circle.green { background: rgba(16,185,129,0.2); color: var(--green); }
+        .icon-circle.amber { background: rgba(245,158,11,0.2); color: var(--amber); }
+        .icon-circle.purple { background: rgba(139,92,246,0.2); color: var(--purple); }
+        .icon-circle.teal { background: rgba(20,184,166,0.2); color: var(--teal); }
+        .icon-circle.red { background: rgba(239,68,68,0.2); color: var(--red); }
+        .icon-circle.pink { background: rgba(236,72,153,0.2); color: var(--pink); }
+        .stat-card .value { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px; }
+        .stat-card .label { color: var(--text-secondary); font-size: 0.78rem; margin-top: 2px; }
+        .stat-card .trend { font-size: 0.76rem; margin-top: 4px; font-weight: 500; }
+        .trend.up { color: var(--green); }
+        .trend.down { color: var(--red); }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            margin-bottom: 18px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .card-header h3 { font-size: 1rem; font-weight: 600; }
+        .card-header .link { color: var(--accent-light); font-size: 0.8rem; cursor: pointer; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+        th {
+            text-align: left;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-secondary);
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        td { padding: 10px 8px; border-bottom: 1px solid rgba(31,50,70,0.5); white-space: nowrap; }
+        tr:last-child td { border-bottom: none; }
+        tr.urgent { background: rgba(239,68,68,0.08); }
+        tr.warning-row { background: rgba(245,158,11,0.06); }
+
+        .status {
+            display: inline-block;
+            padding: 4px 11px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .status.occupied { background: rgba(16,185,129,0.15); color: var(--green); }
+        .status.vacant { background: rgba(239,68,68,0.15); color: var(--red); }
+        .status.negotiating { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .status.available { background: rgba(20,184,166,0.15); color: var(--teal); }
+        .status.expiring { background: rgba(239,68,68,0.2); color: var(--red); }
+        .status.renewed { background: rgba(16,185,129,0.2); color: var(--green); }
+
+        .days-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 700;
+        }
+        .days-badge.critical { background: rgba(239,68,68,0.3); color: #fca5a5; }
+        .days-badge.warning { background: rgba(245,158,11,0.3); color: #fcd34d; }
+        .days-badge.ok { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+
+        .expiry-timeline { display: flex; gap: 12px; overflow-x: auto; padding: 8px 0; }
+        .expiry-month-card {
+            min-width: 200px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            flex-shrink: 0;
+        }
+        .expiry-month-card h4 { font-size: 0.9rem; margin-bottom: 8px; color: var(--accent-light); }
+        .expiry-item { padding: 6px 0; border-bottom: 1px solid rgba(31,50,70,0.4); font-size: 0.78rem; }
+        .expiry-item:last-child { border-bottom: none; }
+
+        .commission-highlight {
+            background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.1));
+            border: 1px solid rgba(139,92,246,0.3);
+        }
+        .highlight-green { color: var(--green); font-weight: 700; }
+        .highlight-red { color: var(--red); font-weight: 700; }
+        .highlight-amber { color: var(--amber); font-weight: 700; }
+
+        .property-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+        .property-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .property-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .property-card .card-top { padding: 18px 20px; }
+        .property-card h4 { font-size: 1rem; margin-bottom: 4px; }
+        .property-card .address { color: var(--text-secondary); font-size: 0.78rem; }
+        .property-card .card-bottom {
+            border-top: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            gap: 20px;
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+        }
+
+        button {
+            padding: 10px 18px;
+            border-radius: 9px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        button:hover { border-color: #4a5568; background: #1e3044; }
+        button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+        button.primary:hover { background: #2563eb; }
+        button.success { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+        button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+        button.warning { background: transparent; border-color: var(--amber); color: var(--amber); }
+        button.small { padding: 5px 12px; font-size: 0.75rem; border-radius: 6px; }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            width: 90%;
+            max-width: 650px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        }
+        .modal h3 { margin-bottom: 18px; font-size: 1.2rem; }
+        .modal label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-secondary);
+        }
+        .modal input, .modal select, .modal textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.88rem;
+            margin-bottom: 12px;
+            font-family: inherit;
+        }
+        .modal textarea { resize: vertical; min-height: 70px; }
+        .modal .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .modal .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+        @media (max-width: 1000px) { .dashboard-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 900px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; }
+            .mobile-toggle { display: block !important; }
+            .modal .form-row, .modal .form-row-3 { grid-template-columns: 1fr; }
+        }
+        @media (min-width: 901px) { .mobile-toggle { display: none !important; } }
+        @media (max-width: 600px) {
+            .main { padding: 14px 12px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .property-grid { grid-template-columns: 1fr; }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 9999;
+            animation: fadeInOut 2.5s ease;
+            font-family: inherit;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            15% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════ TOP BAR ═══════════ -->
+<div class="top-bar">
+    <div style="display:flex;align-items:center;gap:14px;">
+        <span class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" style="cursor:pointer;font-size:1.2rem;">☰</span>
+        <span class="logo" onclick="navigateTo('dashboard', document.querySelector('[data-page=dashboard]'))">
+            <i class="fas fa-building"></i> CREflow Pro
+        </span>
+        <span class="sync-badge online" id="syncBadge">☁️ Synced</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:0.72rem;color:var(--text-secondary);" id="lastUpdated"></span>
+        <button class="small" onclick="syncNow()" title="Force sync"><i class="fas fa-cloud-arrow-up"></i> Sync</button>
+        <button class="small" onclick="exportData()" title="Download backup"><i class="fas fa-download"></i></button>
+        <button class="small" onclick="importData()" title="Restore backup"><i class="fas fa-upload"></i></button>
+        <button class="small danger" onclick="resetAllData()" title="Reset all data"><i class="fas fa-trash"></i></button>
+    </div>
+</div>
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<aside class="sidebar">
+    <nav class="sidebar-nav">
+        <div class="nav-section">Overview</div>
+        <a class="active" data-page="dashboard" onclick="navigateTo('dashboard', this)"><i class="fas fa-th-large"></i> Dashboard</a>
+        <a data-page="expirations" onclick="navigateTo('expirations', this)"><i class="fas fa-calendar-xmark"></i> Lease Expirations <span class="badge warn" id="expiryCount">0</span></a>
+        <div class="nav-section">Portfolio</div>
+        <a data-page="properties" onclick="navigateTo('properties', this)"><i class="fas fa-building-columns"></i> Properties <span class="badge" id="propCount">4</span></a>
+        <a data-page="units" onclick="navigateTo('units', this)"><i class="fas fa-cubes"></i> All Lots / Units <span class="badge" id="unitCount">12</span></a>
+        <div class="nav-section">Tenants & Clients</div>
+        <a data-page="tenants" onclick="navigateTo('tenants', this)"><i class="fas fa-user-tie"></i> Current Tenants <span class="badge green" id="tenantCount">8</span></a>
+        <a data-page="clients" onclick="navigateTo('clients', this)"><i class="fas fa-address-book"></i> Client Base <span class="badge" id="clientCount">14</span></a>
+        <div class="nav-section">Financials</div>
+        <a data-page="commissions" onclick="navigateTo('commissions', this)"><i class="fas fa-dollar-sign"></i> Commissions</a>
+        <a data-page="reports" onclick="navigateTo('reports', this)"><i class="fas fa-chart-line"></i> Reports</a>
+        <div class="nav-section">Workflow</div>
+        <a data-page="tasks" onclick="navigateTo('tasks', this)"><i class="fas fa-list-check"></i> Tasks <span class="badge" id="taskCount">5</span></a>
+    </nav>
+    <div class="sidebar-footer">
+        <small style="color:var(--text-secondary);">Data synced to Firebase ☁️</small>
+    </div>
+</aside>
+
+<!-- ═══════════ MAIN CONTENT ═══════════ -->
+<main class="main" id="mainContent">
+    <div style="text-align:center;padding:80px 20px;">
+        <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:var(--accent-light);"></i>
+        <p style="margin-top:16px;color:var(--text-secondary);">Loading from cloud...</p>
+    </div>
+</main>
+
+<!-- ═══════════ MODAL ═══════════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" id="modalContent" onclick="event.stopPropagation()"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// 🔥 FIREBASE CONFIG — PASTE YOURS HERE
+// ═══════════════════════════════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyCCZwyK2Ej0f1K4bIAQ6XnT-j1nYjmQuBM",
+  authDomain: "daily-dashboard-7d57d.firebaseapp.com",
+  projectId: "daily-dashboard-7d57d",
+  storageBucket: "daily-dashboard-7d57d.firebasestorage.app",
+  messagingSenderId: "260502385598",
+  appId: "1:260502385598:web:1de39607cbcbf36807ffef",
+  measurementId: "G-ZK12RM8ZC3"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Enable offline persistence
+db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+    console.log('Offline mode only:', err.code);
+});
+
+const CLOUD_DOC_ID = 'mainData';
+let data = null;
+let dataLoaded = false;
+let saveTimeout = null;
+
+// ═══════════════════════════════════════
+// DEFAULT DATA
+// ═══════════════════════════════════════
+function getDefaultData() {
+    return {
+        clients: [
+            { id: 1, company: 'TechCorp Inc.', contact: 'Sarah Chen', email: 'sarah@techcorp.com', phone: '+1-415-555-0101', telegram: '@sarachen', notes: 'Looking for 5k-8k sq ft office, bay area' },
+            { id: 2, company: 'FitLife Gym', contact: 'Mike Torres', email: 'mike@fitlife.com', phone: '+1-510-555-0202', telegram: '@miketorres', notes: 'Needs 10k+ sq ft retail, high ceilings' },
+            { id: 3, company: 'MedAssist LLC', contact: 'Dr. Patel', email: 'patel@medassist.com', phone: '+1-408-555-0303', telegram: '@drpatel', notes: 'Medical office, prefers ground floor' },
+            { id: 4, company: 'Oak Dental Group', contact: 'Lisa Park', email: 'lisa@oakdental.com', phone: '+1-650-555-0404', telegram: '@lisapark', notes: '2-3k sq ft, dental buildout required' },
+            { id: 5, company: 'Swift Logistics', contact: 'David Kim', email: 'david@swiftlog.com', phone: '+1-415-555-0505', telegram: '@davidkim', notes: 'Warehouse 20k-30k sq ft, loading docks' },
+            { id: 6, company: 'GreenLeaf Markets', contact: 'Ana Rivera', email: 'ana@greenleaf.com', phone: '+1-510-555-0606', telegram: '@anarivera', notes: 'Organic grocery, 15k sq ft retail' },
+            { id: 7, company: 'CloudBase Software', contact: 'Ryan O\'Neil', email: 'ryan@cloudbase.io', phone: '+1-408-555-0707', telegram: '@ryanon', notes: 'Tech startup, flexible office 3k-5k' },
+            { id: 8, company: 'Bright Dental', contact: 'Dr. Kim', email: 'kim@brightdental.com', phone: '+1-650-555-0808', telegram: '@drkim', notes: '2k sq ft medical/dental space' },
+            { id: 9, company: 'Peak Fitness', contact: 'Jordan Lee', email: 'jordan@peakfit.com', phone: '+1-415-555-0909', telegram: '@jordanlee', notes: 'Boutique fitness studio, 3k-4k' },
+            { id: 10, company: 'Apex Accounting', contact: 'Nina Gupta', email: 'nina@apexacct.com', phone: '+1-510-555-1010', telegram: '@ninagupta', notes: 'Professional services, 2k-3k office' },
+            { id: 11, company: 'Urban Brew Co.', contact: 'Carlos Mendez', email: 'carlos@urbanbrew.com', phone: '+1-408-555-1111', telegram: '@carlosbrew', notes: 'Coffee shop/cafe, 1.5k-2.5k retail' },
+            { id: 12, company: 'Nova Robotics', contact: 'Elena Voss', email: 'elena@novarobotics.com', phone: '+1-650-555-1212', telegram: '@elenavoss', notes: 'R&D lab, 8k-12k industrial flex' },
+            { id: 13, company: 'Harbor Insurance', contact: 'Tom Bradley', email: 'tom@harborins.com', phone: '+1-415-555-1313', telegram: '@tombradley', notes: '3k sq ft office, Class A building' },
+            { id: 14, company: 'Sunrise Daycare', contact: 'Maria Flores', email: 'maria@sunrisedaycare.com', phone: '+1-510-555-1414', telegram: '@mariaflores', notes: '5k sq ft ground floor, outdoor area' },
+        ],
+        properties: [
+            { id: 1, name: 'Metro Tower', address: '100 Market St, San Francisco, CA 94105', type: 'Office', totalSqFt: 32000, yearBuilt: 2010,
+              lots: [
+                { id: 101, lotName: 'Suite 200', sqFt: 4200, floor: 2, status: 'occupied', currentTenant: { clientId: 7, leaseStart: '2024-03-01', leaseEnd: '2026-08-31', rentMonthly: 18500, opexMonthly: 3200, renewalLikelihood: 'likely', renewalNotes: 'Happy with space, discussing 3-yr extension' }, potentialTenants: [] },
+                { id: 102, lotName: 'Suite 400', sqFt: 8200, floor: 4, status: 'vacant', currentTenant: null, potentialTenants: [1, 13], commission: { rate: 5, estimatedValue: 41000 } },
+                { id: 103, lotName: 'Suite 600', sqFt: 6100, floor: 6, status: 'occupied', currentTenant: { clientId: 10, leaseStart: '2023-08-15', leaseEnd: '2026-07-14', rentMonthly: 22000, opexMonthly: 4100, renewalLikelihood: 'uncertain', renewalNotes: 'Considering downsizing' }, potentialTenants: [] },
+              ]},
+            { id: 2, name: 'Harbor Retail Plaza', address: '2500 Harbor Blvd, Oakland, CA 94606', type: 'Retail', totalSqFt: 28000, yearBuilt: 2015,
+              lots: [
+                { id: 201, lotName: 'Unit A', sqFt: 4200, floor: 1, status: 'occupied', currentTenant: { clientId: 11, leaseStart: '2024-01-01', leaseEnd: '2026-06-30', rentMonthly: 9500, opexMonthly: 1800, renewalLikelihood: 'likely', renewalNotes: 'Thriving business' }, potentialTenants: [] },
+                { id: 202, lotName: 'Unit B', sqFt: 8500, floor: 1, status: 'negotiating', currentTenant: null, potentialTenants: [2], commission: { rate: 4.5, estimatedValue: 38250 } },
+                { id: 203, lotName: 'Unit C', sqFt: 3100, floor: 1, status: 'vacant', currentTenant: null, potentialTenants: [6, 9], commission: { rate: 5, estimatedValue: 15500 } },
+                { id: 204, lotName: 'Unit D', sqFt: 6200, floor: 1, status: 'occupied', currentTenant: { clientId: 5, leaseStart: '2023-06-01', leaseEnd: '2026-09-30', rentMonthly: 14000, opexMonthly: 2500, renewalLikelihood: 'unlikely', renewalNotes: 'Expanding to larger space' }, potentialTenants: [] },
+              ]},
+            { id: 3, name: 'Pinebrook Office Park', address: '7800 Pinebrook Rd, San Jose, CA 95128', type: 'Office', totalSqFt: 18000, yearBuilt: 2008,
+              lots: [
+                { id: 301, lotName: 'Building A - Floor 1', sqFt: 5600, floor: 1, status: 'occupied', currentTenant: { clientId: 3, leaseStart: '2024-05-01', leaseEnd: '2026-07-15', rentMonthly: 15500, opexMonthly: 2800, renewalLikelihood: 'likely', renewalNotes: 'Growing practice' }, potentialTenants: [] },
+                { id: 302, lotName: 'Building A - Floor 2', sqFt: 6200, floor: 2, status: 'vacant', currentTenant: null, potentialTenants: [7, 12], commission: { rate: 5.5, estimatedValue: 34100 } },
+              ]},
+            { id: 4, name: 'Riverside Industrial Park', address: '1200 Port Dr, Richmond, CA 94801', type: 'Industrial', totalSqFt: 45000, yearBuilt: 2012,
+              lots: [
+                { id: 401, lotName: 'Warehouse 1', sqFt: 15000, floor: 1, status: 'occupied', currentTenant: { clientId: 5, leaseStart: '2023-11-01', leaseEnd: '2026-08-15', rentMonthly: 21000, opexMonthly: 3800, renewalLikelihood: 'unlikely', renewalNotes: 'Moving to owned facility' }, potentialTenants: [] },
+                { id: 402, lotName: 'Warehouse 2', sqFt: 12000, floor: 1, status: 'vacant', currentTenant: null, potentialTenants: [12], commission: { rate: 5, estimatedValue: 60000 } },
+                { id: 403, lotName: 'Flex Space A', sqFt: 8000, floor: 1, status: 'occupied', currentTenant: { clientId: 2, leaseStart: '2024-02-01', leaseEnd: '2026-05-31', rentMonthly: 12000, opexMonthly: 2000, renewalLikelihood: 'negotiating', renewalNotes: 'Counter-offer sent' }, potentialTenants: [] },
+              ]},
+        ],
+        tasks: [
+            { id: 1, title: 'Send lease renewal proposal to Urban Brew', property: 'Harbor Retail Plaza', lot: 'Unit A', due: '2026-05-05', priority: 'High', done: false, type: 'renewal' },
+            { id: 2, title: 'Start marketing Harbor Retail Unit D', property: 'Harbor Retail Plaza', lot: 'Unit D', due: '2026-05-10', priority: 'High', done: false, type: 'marketing' },
+            { id: 3, title: 'Negotiate renewal with Flex Space tenant', property: 'Riverside Industrial Park', lot: 'Flex Space A', due: '2026-05-01', priority: 'Critical', done: false, type: 'renewal' },
+            { id: 4, title: 'Find replacement tenant for Warehouse 1', property: 'Riverside Industrial Park', lot: 'Warehouse 1', due: '2026-05-15', priority: 'High', done: false, type: 'prospecting' },
+            { id: 5, title: 'Prepare market comps for Pinebrook renewal', property: 'Pinebrook Office Park', lot: 'Building A - Floor 1', due: '2026-05-20', priority: 'Medium', done: false, type: 'renewal' },
+            { id: 6, title: 'Show Metro Tower Suite 400 to TechCorp', property: 'Metro Tower', lot: 'Suite 400', due: '2026-05-08', priority: 'High', done: false, type: 'showing' },
+            { id: 7, title: 'Follow up with Harbor Insurance re: Suite 400', property: 'Metro Tower', lot: 'Suite 400', due: '2026-05-12', priority: 'Medium', done: false, type: 'prospecting' },
+        ],
+        commissionDefaults: { newLeaseRate: 5, renewalRate: 2.5, opexIncluded: false },
+    };
+}
+
+// ═══════════════════════════════════════
+// FIREBASE SYNC
+// ═══════════════════════════════════════
+async function loadFromCloud() {
+    try {
+        setSyncStatus('saving', 'Loading...');
+        const doc = await db.collection('dashboard').doc(CLOUD_DOC_ID).get();
+        if (doc.exists && doc.data().data) {
+            data = doc.data().data;
+            dataLoaded = true;
+            setSyncStatus('online', '☁️ Synced');
+            const updated = doc.data().updatedAt;
+            if (updated && updated.toDate) {
+                document.getElementById('lastUpdated').textContent = 'Updated: ' + updated.toDate().toLocaleString();
+            }
+            console.log('✅ Loaded from Firestore');
+        } else {
+            data = getDefaultData();
+            await saveToCloud(true);
+            setSyncStatus('online', '☁️ Initialized');
+            console.log('📦 Seeded default data to cloud');
+        }
+    } catch (e) {
+        console.error('Cloud load failed, trying localStorage...', e);
+        const saved = localStorage.getItem('creflow_fallback_v4');
+        if (saved) {
+            try {
+                data = JSON.parse(saved);
+                setSyncStatus('offline', '⚠️ Offline (local)');
+            } catch(ex) {
+                data = getDefaultData();
+                setSyncStatus('offline', '⚠️ Offline (defaults)');
+            }
+        } else {
+            data = getDefaultData();
+            setSyncStatus('offline', '⚠️ Offline (defaults)');
+        }
+    }
+    dataLoaded = true;
+    updateCounts();
+    renderDashboard();
+}
+
+async function saveToCloud(silent = false) {
+    if (!data || !dataLoaded) return;
+    if (!silent) setSyncStatus('saving', 'Saving...');
+    try {
+        await db.collection('dashboard').doc(CLOUD_DOC_ID).set({
+            data: data,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        if (!silent) setSyncStatus('online', '☁️ Synced');
+        document.getElementById('lastUpdated').textContent = 'Updated: just now';
+        localStorage.setItem('creflow_fallback_v4', JSON.stringify(data));
+    } catch (e) {
+        console.error('Cloud save failed, using localStorage', e);
+        localStorage.setItem('creflow_fallback_v4', JSON.stringify(data));
+        setSyncStatus('offline', '⚠️ Saved locally');
+    }
+}
+
+function scheduleCloudSave() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => saveToCloud(), 800);
+}
+
+async function syncNow() {
+    await saveToCloud();
+    showToast('☁️ Synced to cloud');
+}
+
+function setSyncStatus(cls, text) {
+    const badge = document.getElementById('syncBadge');
+    if (badge) {
+        badge.className = 'sync-badge ' + cls;
+        badge.textContent = text;
+    }
+}
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function getClientById(id) { return data?.clients?.find(c => c.id === id); }
+function getPropertyById(id) { return data?.properties?.find(p => p.id === id); }
+function formatCurrency(num) { return '$' + (num || 0).toLocaleString(); }
+function formatDate(dateStr) { return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }); }
+function daysFromNow(dateStr) { return Math.ceil((new Date(dateStr+'T00:00:00') - new Date()) / (1000*60*60*24)); }
+function daysBetween(d1, d2) { return Math.ceil((new Date(d2+'T00:00:00') - new Date(d1+'T00:00:00')) / (1000*60*60*24)); }
+
+function getExpiringLeases(months = 3) {
+    if (!data) return [];
+    const now = new Date();
+    const cutoff = new Date(now);
+    cutoff.setMonth(cutoff.getMonth() + months);
+    const nowStr = now.toISOString().split('T')[0];
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return data.properties.flatMap(p =>
+        p.lots.filter(l => l.currentTenant && l.currentTenant.leaseEnd >= nowStr && l.currentTenant.leaseEnd <= cutoffStr)
+            .map(l => ({ ...l, propName: p.name, propId: p.id, daysLeft: daysFromNow(l.currentTenant.leaseEnd), tenant: getClientById(l.currentTenant.clientId) }))
+    ).sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+function getExpirationsByMonth(months = 6) {
+    if (!data) return [];
+    const now = new Date();
+    const result = [];
+    for (let i = 0; i < months; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const expiring = data.properties.flatMap(p =>
+            p.lots.filter(l => l.currentTenant && l.currentTenant.leaseEnd >= d.toISOString().split('T')[0] && l.currentTenant.leaseEnd <= end.toISOString().split('T')[0])
+                .map(l => ({ ...l, propName: p.name, propId: p.id, daysLeft: daysFromNow(l.currentTenant.leaseEnd), tenant: getClientById(l.currentTenant.clientId) }))
+        );
+        result.push({ month: d.toLocaleDateString('en-US', { month:'long', year:'numeric' }), units: expiring, totalRentAtRisk: expiring.reduce((s,u)=>s+(u.currentTenant?.rentMonthly||0),0) });
+    }
+    return result;
+}
+
+function calculateCommission(lot, isRenewal = false) {
+    if (!data) return 0;
+    if (!lot.currentTenant && !lot.commission) return 0;
+    const rate = isRenewal ? data.commissionDefaults.renewalRate : data.commissionDefaults.newLeaseRate;
+    let annual = 0;
+    if (isRenewal && lot.currentTenant) annual = lot.currentTenant.rentMonthly * 12;
+    else if (lot.commission) return lot.commission.estimatedValue || 0;
+    else if (lot.currentTenant) annual = lot.currentTenant.rentMonthly * 12;
+    else return 0;
+    if (data.commissionDefaults.opexIncluded && lot.currentTenant) annual += lot.currentTenant.opexMonthly * 12;
+    return Math.round(annual * rate / 100);
+}
+
+function getCommissionPipeline() {
+    if (!data) return { newLease: [], renewal: [], totalNew: 0, totalRenewal: 0, total: 0 };
+    const newLease = data.properties.flatMap(p =>
+        p.lots.filter(l => (l.status==='vacant'||l.status==='negotiating') && l.commission)
+            .map(l => ({ type:'New Lease', property:p.name, lot:l.lotName, sqFt:l.sqFt, potentialTenants:(l.potentialTenants||[]).map(id=>getClientById(id)).filter(Boolean), estimatedCommission:calculateCommission(l,false), status:l.status }))
+    );
+    const renewal = getExpiringLeases(6).map(l => ({ type:'Renewal', property:l.propName, lot:l.lotName, sqFt:l.sqFt, tenant:l.tenant, leaseEnd:l.currentTenant.leaseEnd, renewalLikelihood:l.currentTenant.renewalLikelihood||'unknown', estimatedCommission:calculateCommission(l,true), status:l.status }));
+    return {
+        newLease, renewal,
+        totalNew: newLease.reduce((s,c)=>s+c.estimatedCommission,0),
+        totalRenewal: renewal.reduce((s,c)=>s+c.estimatedCommission,0),
+        total: newLease.reduce((s,c)=>s+c.estimatedCommission,0) + renewal.reduce((s,c)=>s+c.estimatedCommission,0)
+    };
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════
+function navigateTo(page, el) {
+    document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+    if (el) el.classList.add('active');
+    renderPage(page);
+    document.querySelector('.sidebar').classList.remove('open');
+}
+
+function updateCounts() {
+    if (!data) return;
+    document.getElementById('propCount').textContent = data.properties.length;
+    const allUnits = data.properties.flatMap(p=>p.lots);
+    document.getElementById('unitCount').textContent = allUnits.length;
+    document.getElementById('tenantCount').textContent = allUnits.filter(u=>u.currentTenant).length;
+    document.getElementById('clientCount').textContent = data.clients.length;
+    document.getElementById('taskCount').textContent = data.tasks.filter(t=>!t.done).length;
+    document.getElementById('expiryCount').textContent = getExpiringLeases(3).length;
+}
+
+// ═══════════════════════════════════════
+// RENDER PAGES
+// ═══════════════════════════════════════
+const mainContent = document.getElementById('mainContent');
+
+function renderPage(page) {
+    if (!data || !dataLoaded) {
+        mainContent.innerHTML = '<div style="text-align:center;padding:80px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:var(--accent-light);"></i><p style="margin-top:16px;">Loading...</p></div>';
+        return;
+    }
+    switch(page) {
+        case 'dashboard': renderDashboard(); break;
+        case 'expirations': renderExpirations(); break;
+        case 'properties': renderProperties(); break;
+        case 'units': renderAllUnits(); break;
+        case 'tenants': renderTenants(); break;
+        case 'clients': renderClients(); break;
+        case 'commissions': renderCommissions(); break;
+        case 'reports': renderReports(); break;
+        case 'tasks': renderTasks(); break;
+        default: renderDashboard();
+    }
+    updateCounts();
+}
+
+function renderDashboard() {
+    const allUnits = data.properties.flatMap(p=>p.lots);
+    const occupied = allUnits.filter(u=>u.status==='occupied');
+    const vacant = allUnits.filter(u=>u.status==='vacant'||u.status==='negotiating');
+    const totalRent = occupied.reduce((s,u)=>s+(u.currentTenant?.rentMonthly||0),0);
+    const exp3 = getExpiringLeases(3);
+    const pipeline = getCommissionPipeline();
+    const expByMonth = getExpirationsByMonth(3);
+    const recentlyExpired = [];
+    const now = new Date();
+    const past30 = new Date(now); past30.setDate(past30.getDate() - 30);
+    data.properties.forEach(p => {
+        p.lots.forEach(l => {
+            if (l.currentTenant && l.currentTenant.leaseEnd >= past30.toISOString().split('T')[0] && l.currentTenant.leaseEnd < now.toISOString().split('T')[0]) {
+                recentlyExpired.push({...l, propName: p.name, propId: p.id, daysAgo: daysBetween(l.currentTenant.leaseEnd, now.toISOString().split('T')[0]), tenant: getClientById(l.currentTenant.clientId)});
+            }
+        });
+    });
+
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:14px;">
+            <div>
+                <h2 style="font-size:1.5rem;">Dashboard</h2>
+                <div style="color:var(--text-secondary);font-size:0.85rem;">${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="warning" onclick="navigateTo('expirations', document.querySelector('[data-page=expirations]'))"><i class="fas fa-exclamation-triangle"></i> ${exp3.length} Expiring Soon</button>
+                <button class="primary" onclick="openPropertyModal()"><i class="fas fa-plus"></i> Add Property</button>
+                <button class="success" onclick="openClientModal()"><i class="fas fa-plus"></i> Add Client</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle blue"><i class="fas fa-building"></i></div></div><div class="value">${data.properties.length}</div><div class="label">Properties</div><div class="trend up">${allUnits.length} total units</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle green"><i class="fas fa-user-check"></i></div></div><div class="value">${occupied.length}</div><div class="label">Occupied Units</div><div class="trend up">${formatCurrency(totalRent)}/mo rent roll</div></div>
+            <div class="stat-card ${exp3.length>2?'commission-highlight':''}"><div class="icon-row"><div class="icon-circle red"><i class="fas fa-calendar-xmark"></i></div></div><div class="value">${exp3.length}</div><div class="label">Expiring ≤3 Months</div><div class="trend ${exp3.length>2?'down':'up'}">${exp3.length>0?'⚠ Action required':'✓ All stable'}</div></div>
+            <div class="stat-card commission-highlight"><div class="icon-row"><div class="icon-circle purple"><i class="fas fa-dollar-sign"></i></div></div><div class="value">${formatCurrency(pipeline.total)}</div><div class="label">Commission Pipeline</div><div class="trend up">${formatCurrency(pipeline.totalNew)} new + ${formatCurrency(pipeline.totalRenewal)} renewal</div></div>
+        </div>
+
+        <div class="card" style="border-left:3px solid var(--amber);">
+            <div class="card-header"><h3><i class="fas fa-calendar-xmark" style="color:var(--amber);"></i> 🔴 Upcoming Lease Expirations (Next 3 Months)</h3><span class="link" onclick="navigateTo('expirations', document.querySelector('[data-page=expirations]'))">View Full Timeline →</span></div>
+            <div class="expiry-timeline">
+                ${expByMonth.map(m => `
+                    <div class="expiry-month-card" style="${m.units.length===0?'opacity:0.5;':''}${m.units.some(u=>u.currentTenant?.renewalLikelihood==='unlikely')?'border:2px solid var(--red);':''}">
+                        <h4>${m.month} <small style="color:var(--text-secondary);font-weight:400;">(${m.units.length} units)</small></h4>
+                        ${m.units.length===0 ? '<p style="font-size:0.75rem;color:var(--text-secondary);">No expirations</p>' : ''}
+                        ${m.units.map(u => {
+                            let cls = 'ok';
+                            if (u.daysLeft <= 30) cls = 'critical';
+                            else if (u.daysLeft <= 60) cls = 'warning';
+                            const icon = u.currentTenant?.renewalLikelihood==='unlikely'?'🔴':u.currentTenant?.renewalLikelihood==='likely'?'🟢':'🟡';
+                            return `<div class="expiry-item"><strong>${u.propName}</strong> — ${u.lotName}<br><small>${u.tenant?.company||'Unknown'} • <span class="days-badge ${cls}">${u.daysLeft} days</span> • ${formatCurrency(u.currentTenant?.rentMonthly||0)}/mo<br>${icon} ${u.currentTenant?.renewalLikelihood||'unknown'}</small></div>`;
+                        }).join('')}
+                        ${m.totalRentAtRisk>0 ? `<div style="margin-top:8px;font-size:0.72rem;color:var(--red);font-weight:600;">⚠ ${formatCurrency(m.totalRentAtRisk)}/mo at risk</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;" class="dashboard-grid">
+            <div class="card">
+                <div class="card-header"><h3><i class="fas fa-cubes"></i> All Units Overview</h3><span class="link" onclick="navigateTo('units', document.querySelector('[data-page=units]'))">View All →</span></div>
+                <div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Tenant</th><th>Rent/Mo</th><th>Lease End</th><th>Status</th></tr></thead><tbody>
+                    ${allUnits.slice(0,8).map(u => {
+                        const prop = data.properties.find(p=>p.lots.includes(u));
+                        const client = u.currentTenant ? getClientById(u.currentTenant.clientId) : null;
+                        const dl = u.currentTenant ? daysFromNow(u.currentTenant.leaseEnd) : null;
+                        return `<tr class="${dl&&dl<=90?'warning-row':''} ${dl&&dl<=30?'urgent':''}"><td><strong>${prop?.name||''}</strong></td><td>${u.lotName}</td><td>${client?client.company:'—'}</td><td>${u.currentTenant?formatCurrency(u.currentTenant.rentMonthly):'—'}</td><td>${u.currentTenant?formatDate(u.currentTenant.leaseEnd)+(dl&&dl<=90?` <span class="days-badge ${dl<=30?'critical':'warning'}">${dl}d</span>`:''):'—'}</td><td><span class="status ${u.status}">${u.status.charAt(0).toUpperCase()+u.status.slice(1)}</span></td></tr>`;
+                    }).join('')}
+                </tbody></table></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:18px;">
+                <div class="card"><div class="card-header"><h3><i class="fas fa-list-check"></i> Priority Tasks</h3><span class="link" onclick="navigateTo('tasks', document.querySelector('[data-page=tasks]'))">View All →</span></div>
+                    ${data.tasks.filter(t=>!t.done).slice(0,5).map(t => `
+                        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.84rem;">
+                            <input type="checkbox" onchange="toggleTask(${t.id})" style="accent-color:var(--accent);margin-top:2px;cursor:pointer;">
+                            <div style="flex:1;">${t.title}<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">${t.property} • ${t.lot} • Due ${formatDate(t.due)}<span style="margin-left:6px;padding:1px 7px;border-radius:10px;font-size:0.6rem;font-weight:600;background:${t.priority==='Critical'?'rgba(239,68,68,0.3)':t.priority==='High'?'rgba(239,68,68,0.2)':'rgba(245,158,11,0.2)'};color:${t.priority==='Critical'||t.priority==='High'?'var(--red)':'var(--amber)'}">${t.priority}</span></div></div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="card commission-highlight"><div class="card-header"><h3><i class="fas fa-dollar-sign"></i> Commission Pipeline</h3><span class="link" onclick="navigateTo('commissions', document.querySelector('[data-page=commissions]'))">Details →</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;">
+                        <div><div style="font-size:1.3rem;font-weight:700;color:var(--purple);">${formatCurrency(pipeline.totalNew)}</div><div style="font-size:0.7rem;color:var(--text-secondary);">New Leases</div></div>
+                        <div><div style="font-size:1.3rem;font-weight:700;color:var(--accent-light);">${formatCurrency(pipeline.totalRenewal)}</div><div style="font-size:0.7rem;color:var(--text-secondary);">Renewals</div></div>
+                    </div>
+                    <div style="margin-top:8px;text-align:center;font-size:0.8rem;color:var(--green);">Total: <strong>${formatCurrency(pipeline.total)}</strong></div>
+                </div>
+            </div>
+        </div>
+
+        ${recentlyExpired.length > 0 ? `
+        <div class="card" style="margin-top:18px;border-left:3px solid var(--red);">
+            <div class="card-header"><h3><i class="fas fa-clock" style="color:var(--red);"></i> Recently Expired (Last 30 Days)</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Tenant</th><th>Expired</th><th>Days Ago</th><th>Action</th></tr></thead><tbody>
+                ${recentlyExpired.map(l => `<tr class="urgent"><td>${l.propName}</td><td>${l.lotName}</td><td>${l.tenant?.company||'Unknown'}</td><td>${formatDate(l.currentTenant.leaseEnd)}</td><td><span class="days-badge critical">${l.daysAgo} days ago</span></td><td><button class="small warning" onclick="markAsVacant(${l.propId},${l.id})">Mark Vacant</button></td></tr>`).join('')}
+            </tbody></table></div>
+        </div>` : ''}
+    `;
+}
+
+function renderExpirations() {
+    const expByMonth = getExpirationsByMonth(12);
+    const exp3 = getExpiringLeases(3);
+    const recentlyExpired = [];
+    const now = new Date();
+    const past60 = new Date(now); past60.setDate(past60.getDate() - 60);
+    data.properties.forEach(p => p.lots.forEach(l => {
+        if (l.currentTenant && l.currentTenant.leaseEnd >= past60.toISOString().split('T')[0] && l.currentTenant.leaseEnd < now.toISOString().split('T')[0]) {
+            recentlyExpired.push({...l, propName:p.name, propId:p.id, daysAgo:daysBetween(l.currentTenant.leaseEnd, now.toISOString().split('T')[0]), tenant:getClientById(l.currentTenant.clientId)});
+        }
+    }));
+
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;"><h2>Lease Expiration Timeline</h2><button class="primary" onclick="openTaskModal()"><i class="fas fa-plus"></i> Add Renewal Task</button></div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle red"><i class="fas fa-calendar-xmark"></i></div></div><div class="value">${exp3.length}</div><div class="label">Expiring ≤3mo</div><div class="trend down">⚠ Immediate action</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle amber"><i class="fas fa-calendar-check"></i></div></div><div class="value">${getExpiringLeases(6).length}</div><div class="label">Expiring ≤6mo</div><div class="trend">Plan ahead</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle green"><i class="fas fa-rotate"></i></div></div><div class="value">${getExpiringLeases(12).filter(l=>l.currentTenant?.renewalLikelihood==='likely').length}</div><div class="label">Likely Renewals</div><div class="trend up">Good retention</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle purple"><i class="fas fa-triangle-exclamation"></i></div></div><div class="value">${getExpiringLeases(12).filter(l=>l.currentTenant?.renewalLikelihood==='unlikely').length}</div><div class="label">Likely Leaving</div><div class="trend down">Need replacement</div></div>
+        </div>
+        ${expByMonth.map(m => {
+            const hasUnlikely = m.units.some(u=>u.currentTenant?.renewalLikelihood==='unlikely');
+            return `<div class="card" style="${m.units.length===0?'opacity:0.4;':''}${hasUnlikely?'border-left:3px solid var(--red);':m.units.length>0?'border-left:3px solid var(--amber);':''}">
+                <div class="card-header"><h3>${m.month} <span style="font-weight:400;color:var(--text-secondary);font-size:0.8rem;">(${m.units.length} expiring, ${formatCurrency(m.totalRentAtRisk)}/mo at risk)</span></h3></div>
+                ${m.units.length===0 ? '<p style="color:var(--text-secondary);padding:8px 0;">No lease expirations this month ✓</p>' : `
+                <div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Tenant</th><th>Lease End</th><th>Days Left</th><th>Rent/Mo</th><th>Renewal</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+                    ${m.units.map(u => {
+                        const cls = u.daysLeft<=30?'critical':u.daysLeft<=60?'warning':'ok';
+                        return `<tr class="${u.daysLeft<=30?'urgent':u.daysLeft<=60?'warning-row':''}">
+                            <td><span style="cursor:pointer;color:var(--accent-light);" onclick="viewProperty(${u.propId})">${u.propName}</span></td>
+                            <td><strong>${u.lotName}</strong></td><td>${u.tenant?.company||'Unknown'}<br><small>${u.tenant?.contact||''}</small></td>
+                            <td>${formatDate(u.currentTenant.leaseEnd)}</td><td><span class="days-badge ${cls}">${u.daysLeft}d</span></td>
+                            <td>${formatCurrency(u.currentTenant?.rentMonthly||0)}</td>
+                            <td><span class="status ${u.currentTenant?.renewalLikelihood==='likely'?'renewed':u.currentTenant?.renewalLikelihood==='unlikely'?'expiring':'negotiating'}">${u.currentTenant?.renewalLikelihood||'unknown'}</span></td>
+                            <td><small>${u.currentTenant?.renewalNotes||'—'}</small></td>
+                            <td>
+                                <button class="small" onclick="openRenewalModal(${u.propId},${u.id})"><i class="fas fa-edit"></i> Update</button>
+                                ${u.currentTenant?.renewalLikelihood==='unlikely' ? `<button class="small warning" style="margin-top:3px;" onclick="findReplacement(${u.propId},${u.id})"><i class="fas fa-search"></i> Find New</button>` : ''}
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody></table></div>`}
+            </div>`;
+        }).join('')}
+        ${recentlyExpired.length>0 ? `
+        <div class="card" style="border-left:3px solid var(--red);margin-top:18px;"><div class="card-header"><h3><i class="fas fa-clock-rotate-left"></i> Recently Expired (Last 60 Days)</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Tenant</th><th>Expired</th><th>Days Ago</th><th>Rent Lost/Mo</th><th>Action</th></tr></thead><tbody>
+                ${recentlyExpired.map(l => `<tr class="urgent"><td>${l.propName}</td><td>${l.lotName}</td><td>${l.tenant?.company}</td><td>${formatDate(l.currentTenant.leaseEnd)}</td><td><span class="days-badge critical">${l.daysAgo}d</span></td><td>${formatCurrency(l.currentTenant?.rentMonthly||0)}</td><td><button class="small warning" onclick="markAsVacant(${l.propId},${l.id})">Mark Vacant</button></td></tr>`).join('')}
+            </tbody></table></div>
+        </div>` : ''}
+    `;
+}
+
+function renderProperties() {
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;"><h2>Properties</h2><button class="primary" onclick="openPropertyModal()"><i class="fas fa-plus"></i> Add Property</button></div>
+        <div class="property-grid">
+            ${data.properties.map(p => {
+                const occupied = p.lots.filter(l=>l.status==='occupied').length;
+                const vacant = p.lots.filter(l=>l.status==='vacant'||l.status==='negotiating').length;
+                const expiring = p.lots.filter(l=>l.currentTenant&&daysFromNow(l.currentTenant.leaseEnd)<=90&&daysFromNow(l.currentTenant.leaseEnd)>0).length;
+                return `<div class="property-card" onclick="viewProperty(${p.id})">
+                    <div class="card-top"><div><h4>${p.name} ${expiring>0?`<span class="days-badge critical" style="font-size:0.65rem;">${expiring} expiring</span>`:''}</h4><div class="address"><i class="fas fa-map-marker-alt"></i> ${p.address}</div><div style="margin-top:6px;font-size:0.78rem;color:var(--text-secondary);">${p.type} • ${p.totalSqFt.toLocaleString()} sq ft • Built ${p.yearBuilt}</div></div><span class="status ${vacant===0?'occupied':'available'}">${vacant===0?'Fully Leased':vacant+' available'}</span></div>
+                    <div class="card-bottom"><span><i class="fas fa-cubes"></i> ${p.lots.length} units</span><span><i class="fas fa-check-circle" style="color:var(--green)"></i> ${occupied} occupied</span>${vacant>0?`<span><i class="fas fa-door-open" style="color:var(--amber)"></i> ${vacant} vacant</span>`:''}${expiring>0?`<span><i class="fas fa-clock" style="color:var(--red)"></i> ${expiring} expiring</span>`:''}</div>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
+}
+
+function viewProperty(propId) {
+    const prop = getPropertyById(propId);
+    if (!prop) return;
+    const occupied = prop.lots.filter(l=>l.status==='occupied').length;
+    const totalRent = prop.lots.filter(l=>l.currentTenant).reduce((s,l)=>s+(l.currentTenant.rentMonthly||0),0);
+
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+            <div><h2>${prop.name}</h2><div style="color:var(--text-secondary);font-size:0.85rem;"><span style="cursor:pointer;color:var(--accent-light);" onclick="navigateTo('properties',document.querySelector('[data-page=properties]'))">Properties</span> / ${prop.name}</div></div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="openLotModal(${prop.id})"><i class="fas fa-plus"></i> Add Lot</button>
+                <button class="primary" onclick="openPropertyModal(${prop.id})"><i class="fas fa-edit"></i> Edit Property</button>
+            </div>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle blue"><i class="fas fa-cubes"></i></div></div><div class="value">${prop.lots.length}</div><div class="label">Total Units</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle green"><i class="fas fa-user-check"></i></div></div><div class="value">${occupied}</div><div class="label">Occupied</div><div class="trend up">${formatCurrency(totalRent)}/mo</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle amber"><i class="fas fa-door-open"></i></div></div><div class="value">${prop.lots.length-occupied}</div><div class="label">Vacant</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle teal"><i class="fas fa-ruler-combined"></i></div></div><div class="value">${prop.totalSqFt.toLocaleString()}</div><div class="label">Total Sq Ft</div></div>
+        </div>
+        <div class="card"><div class="card-header"><h3><i class="fas fa-cubes"></i> Lots / Units</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Lot</th><th>Sq Ft</th><th>Floor</th><th>Status</th><th>Tenant</th><th>Lease Start</th><th>Lease End</th><th>Rent/Mo</th><th>OPEX/Mo</th><th>Renewal</th><th>Commission</th><th>Actions</th></tr></thead><tbody>
+                ${prop.lots.map(l => {
+                    const client = l.currentTenant ? getClientById(l.currentTenant.clientId) : null;
+                    const potentials = (l.potentialTenants||[]).map(id=>getClientById(id)).filter(Boolean);
+                    const dl = l.currentTenant ? daysFromNow(l.currentTenant.leaseEnd) : null;
+                    const commNew = l.commission ? calculateCommission(l,false) : 0;
+                    const commRen = l.currentTenant ? calculateCommission(l,true) : 0;
+                    return `<tr class="${dl&&dl<=90?'warning-row':''} ${dl&&dl<=30?'urgent':''}">
+                        <td><strong>${l.lotName}</strong></td><td>${l.sqFt.toLocaleString()}</td><td>${l.floor}</td>
+                        <td><span class="status ${l.status}">${l.status.charAt(0).toUpperCase()+l.status.slice(1)}</span></td>
+                        <td>${client?`<strong>${client.company}</strong><br><small>${client.contact}</small>`:'—'}</td>
+                        <td>${l.currentTenant?formatDate(l.currentTenant.leaseStart):'—'}</td>
+                        <td>${l.currentTenant?formatDate(l.currentTenant.leaseEnd)+(dl&&dl<=90?` <span class="days-badge ${dl<=30?'critical':'warning'}">${dl}d</span>`:''):'—'}</td>
+                        <td>${l.currentTenant?formatCurrency(l.currentTenant.rentMonthly):'—'}</td>
+                        <td>${l.currentTenant?formatCurrency(l.currentTenant.opexMonthly):'—'}</td>
+                        <td>${l.currentTenant?`<span class="status ${l.currentTenant.renewalLikelihood==='likely'?'renewed':l.currentTenant.renewalLikelihood==='unlikely'?'expiring':'negotiating'}">${l.currentTenant.renewalLikelihood||'pending'}</span>`:'—'}</td>
+                        <td>${commNew>0?`<span class="highlight-green">${formatCurrency(commNew)}</span>`:commRen>0?`<span class="highlight-amber">${formatCurrency(commRen)}</span>`:'—'}</td>
+                        <td>
+                            <button class="small" onclick="editLot(${prop.id},${l.id})"><i class="fas fa-edit"></i></button>
+                            ${l.currentTenant?`<button class="small warning" style="margin-left:3px;" onclick="openRenewalModal(${prop.id},${l.id})"><i class="fas fa-rotate"></i></button>`:''}
+                            ${l.status==='vacant'||l.status==='negotiating'?`<button class="small success" style="margin-left:3px;" onclick="assignPotentialTenant(${prop.id},${l.id})">+Prospect</button>`:''}
+                        </td>
+                    </tr>`;
+                }).join('')}
+            </tbody></table></div>
+        </div>
+        <button onclick="navigateTo('properties',document.querySelector('[data-page=properties]'))" style="margin-top:14px;"><i class="fas fa-arrow-left"></i> Back to Properties</button>
+    `;
+}
+
+function renderAllUnits() {
+    const allUnits = data.properties.flatMap(p=>p.lots.map(l=>({...l,propName:p.name,propId:p.id})));
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;"><h2>All Lots / Units</h2>
+            <select onchange="filterUnits(this.value)" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);">
+                <option value="all">All Statuses</option><option value="occupied">Occupied</option><option value="vacant">Vacant</option><option value="negotiating">Negotiating</option>
+            </select>
+        </div>
+        <div class="card"><div class="table-wrap"><table id="unitsTable"><thead><tr><th>Property</th><th>Unit</th><th>Sq Ft</th><th>Status</th><th>Tenant</th><th>Rent/Mo</th><th>Lease End</th><th>Renewal</th></tr></thead><tbody>
+            ${allUnits.map(u => {
+                const client = u.currentTenant?getClientById(u.currentTenant.clientId):null;
+                const dl = u.currentTenant?daysFromNow(u.currentTenant.leaseEnd):null;
+                return `<tr data-status="${u.status}"><td><span style="cursor:pointer;color:var(--accent-light);" onclick="viewProperty(${u.propId})">${u.propName}</span></td><td><strong>${u.lotName}</strong></td><td>${u.sqFt.toLocaleString()}</td><td><span class="status ${u.status}">${u.status.charAt(0).toUpperCase()+u.status.slice(1)}</span></td><td>${client?client.company:'—'}</td><td>${u.currentTenant?formatCurrency(u.currentTenant.rentMonthly):'—'}</td><td>${u.currentTenant?formatDate(u.currentTenant.leaseEnd)+(dl&&dl<=90?` <span class="days-badge ${dl<=30?'critical':'warning'}">${dl}d</span>`:''):'—'}</td><td>${u.currentTenant?u.currentTenant.renewalLikelihood||'—':'—'}</td></tr>`;
+            }).join('')}
+        </tbody></table></div></div>
+    `;
+}
+
+function filterUnits(status) {
+    document.querySelectorAll('#unitsTable tbody tr').forEach(tr => {
+        tr.style.display = (status==='all'||tr.dataset.status===status) ? '' : 'none';
+    });
+}
+
+function renderTenants() {
+    const occupiedUnits = data.properties.flatMap(p=>p.lots.filter(l=>l.currentTenant).map(l=>({...l,propName:p.name,propId:p.id})));
+    mainContent.innerHTML = `
+        <h2 style="margin-bottom:16px;">Current Tenants</h2>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>Tenant</th><th>Contact</th><th>Property</th><th>Unit</th><th>Lease Start</th><th>Lease End</th><th>Rent/Mo</th><th>OPEX/Mo</th><th>Total/Mo</th><th>Renewal</th></tr></thead><tbody>
+            ${occupiedUnits.map(u => {
+                const client = getClientById(u.currentTenant.clientId);
+                if(!client) return '';
+                const dl = daysFromNow(u.currentTenant.leaseEnd);
+                return `<tr class="${dl<=90?'warning-row':''} ${dl<=30?'urgent':''}"><td><strong>${client.company}</strong></td><td>${client.contact}<br><small>${client.phone} • ${client.email}</small></td><td><span style="cursor:pointer;color:var(--accent-light);" onclick="viewProperty(${u.propId})">${u.propName}</span></td><td>${u.lotName}</td><td>${formatDate(u.currentTenant.leaseStart)}</td><td>${formatDate(u.currentTenant.leaseEnd)} ${dl<=90?`<span class="days-badge ${dl<=30?'critical':'warning'}">${dl}d</span>`:''}</td><td>${formatCurrency(u.currentTenant.rentMonthly)}</td><td>${formatCurrency(u.currentTenant.opexMonthly)}</td><td><strong>${formatCurrency(u.currentTenant.rentMonthly+u.currentTenant.opexMonthly)}</strong></td><td><span class="status ${u.currentTenant.renewalLikelihood==='likely'?'renewed':u.currentTenant.renewalLikelihood==='unlikely'?'expiring':'negotiating'}">${u.currentTenant.renewalLikelihood||'pending'}</span></td></tr>`;
+            }).join('')}
+        </tbody></table></div></div>
+    `;
+}
+
+function renderClients() {
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h2>Client Base</h2><button class="primary" onclick="openClientModal()"><i class="fas fa-plus"></i> Add Client</button></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>Company</th><th>Contact Person</th><th>Email</th><th>Phone</th><th>Telegram</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+            ${data.clients.map(c => `<tr><td><strong>${c.company}</strong></td><td>${c.contact}</td><td><a href="mailto:${c.email}" style="color:var(--accent-light);">${c.email}</a></td><td>${c.phone}</td><td>${c.telegram?`<span style="color:var(--accent-light);">${c.telegram}</span>`:'—'}</td><td><small>${c.notes||'—'}</small></td><td><button class="small" onclick="viewClient(${c.id})"><i class="fas fa-eye"></i> View</button> <button class="small" onclick="openClientModal(${c.id})"><i class="fas fa-edit"></i></button></td></tr>`).join('')}
+        </tbody></table></div></div>
+    `;
+}
+
+function viewClient(clientId) {
+    const c = getClientById(clientId);
+    if(!c) return;
+    const relatedUnits = data.properties.flatMap(p=>p.lots.filter(l=>(l.currentTenant&&l.currentTenant.clientId===c.id)||(l.potentialTenants&&l.potentialTenants.includes(c.id))).map(l=>({...l,propName:p.name,propId:p.id})));
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;"><div><h2>${c.company}</h2><div style="font-size:0.85rem;"><span style="cursor:pointer;color:var(--accent-light);" onclick="navigateTo('clients',document.querySelector('[data-page=clients]'))">Clients</span> / ${c.company}</div></div><div><button onclick="openClientModal(${c.id})"><i class="fas fa-edit"></i> Edit</button> <button class="danger small" onclick="deleteClient(${c.id})"><i class="fas fa-trash"></i> Delete</button></div></div>
+        <div class="card"><h3 style="margin-bottom:12px;"><i class="fas fa-address-card"></i> Contact Information</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.88rem;"><div><strong>Company:</strong> ${c.company}</div><div><strong>Contact Person:</strong> ${c.contact}</div><div><strong>Email:</strong> <a href="mailto:${c.email}" style="color:var(--accent-light);">${c.email}</a></div><div><strong>Phone:</strong> ${c.phone}</div><div><strong>Telegram:</strong> ${c.telegram||'—'}</div><div><strong>Notes:</strong> ${c.notes||'—'}</div></div></div>
+        <div class="card"><h3 style="margin-bottom:12px;"><i class="fas fa-link"></i> Related Units</h3>${relatedUnits.length>0?`<div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Relationship</th><th>Status</th></tr></thead><tbody>${relatedUnits.map(u=>`<tr><td><span style="cursor:pointer;color:var(--accent-light);" onclick="viewProperty(${u.propId})">${u.propName}</span></td><td>${u.lotName}</td><td>${u.currentTenant&&u.currentTenant.clientId===c.id?'<span class="status occupied">Current Tenant</span>':'<span class="status available">Potential Tenant</span>'}</td><td><span class="status ${u.status}">${u.status.charAt(0).toUpperCase()+u.status.slice(1)}</span></td></tr>`).join('')}</tbody></table></div>`:'<p style="color:var(--text-secondary);">No related units.</p>'}</div>
+        <button onclick="navigateTo('clients',document.querySelector('[data-page=clients]'))" style="margin-top:14px;"><i class="fas fa-arrow-left"></i> Back to Clients</button>
+    `;
+}
+
+function renderCommissions() {
+    const pipeline = getCommissionPipeline();
+    const occupiedUnits = data.properties.flatMap(p=>p.lots.filter(l=>l.currentTenant));
+    const annualRent = occupiedUnits.reduce((s,l)=>s+(l.currentTenant?.rentMonthly||0)*12,0);
+
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h2>Commission Calculations</h2><button onclick="openCommissionSettingsModal()"><i class="fas fa-cog"></i> Settings</button></div>
+        <div class="stats-grid">
+            <div class="stat-card commission-highlight"><div class="icon-row"><div class="icon-circle purple"><i class="fas fa-dollar-sign"></i></div></div><div class="value">${formatCurrency(pipeline.total)}</div><div class="label">Total Commission Pipeline</div><div class="trend up">All pending deals</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle green"><i class="fas fa-file-contract"></i></div></div><div class="value">${formatCurrency(pipeline.totalNew)}</div><div class="label">New Lease Commissions</div><div class="trend">${pipeline.newLease.length} deals • ${data.commissionDefaults.newLeaseRate}% rate</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle blue"><i class="fas fa-rotate"></i></div></div><div class="value">${formatCurrency(pipeline.totalRenewal)}</div><div class="label">Renewal Commissions</div><div class="trend">${pipeline.renewal.length} deals • ${data.commissionDefaults.renewalRate}% rate</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle teal"><i class="fas fa-chart-pie"></i></div></div><div class="value">${formatCurrency(annualRent)}</div><div class="label">Annual Rent Roll</div><div class="trend">${occupiedUnits.length} active tenants</div></div>
+        </div>
+        <div class="card" style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);margin-bottom:18px;">
+            <div style="display:flex;gap:30px;flex-wrap:wrap;font-size:0.85rem;"><div><strong>New Lease Rate:</strong> <span class="highlight-green">${data.commissionDefaults.newLeaseRate}%</span></div><div><strong>Renewal Rate:</strong> <span class="highlight-amber">${data.commissionDefaults.renewalRate}%</span></div><div><strong>OPEX Included:</strong> ${data.commissionDefaults.opexIncluded?'<span class="highlight-green">Yes</span>':'<span class="highlight-red">No</span>'}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="dashboard-grid">
+            <div class="card"><div class="card-header"><h3>New Lease Pipeline</h3></div><div class="table-wrap"><table><thead><tr><th>Property</th><th>Unit</th><th>Sq Ft</th><th>Prospects</th><th>Est. Commission</th></tr></thead><tbody>
+                ${pipeline.newLease.length===0?'<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">No new lease opportunities</td></tr>':''}
+                ${pipeline.newLease.map(c=>`<tr><td>${c.property}</td><td>${c.lot}</td><td>${c.sqFt.toLocaleString()}</td><td>${c.potentialTenants.map(pt=>pt?.company||'').join(', ')||'None'}</td><td class="highlight-green">${formatCurrency(c.estimatedCommission)}</td></tr>`).join('')}
+                ${pipeline.newLease.length>0?`<tr style="font-weight:700;border-top:2px solid var(--border);"><td colspan="4">Total New Lease Pipeline</td><td class="highlight-green">${formatCurrency(pipeline.totalNew)}</td></tr>`:''}
+            </tbody></table></div></div>
+            <div class="card"><div class="card-header"><h3>Renewal Pipeline (6mo)</h3></div><div class="table-wrap"><table><thead><tr><th>Tenant</th><th>Property</th><th>Lease End</th><th>Likelihood</th><th>Est. Commission</th></tr></thead><tbody>
+                ${pipeline.renewal.length===0?'<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);">No upcoming renewals</td></tr>':''}
+                ${pipeline.renewal.map(c=>`<tr><td>${c.tenant?.company||''}</td><td>${c.property} - ${c.lot}</td><td>${formatDate(c.leaseEnd)}</td><td><span class="status ${c.renewalLikelihood==='likely'?'renewed':c.renewalLikelihood==='unlikely'?'expiring':'negotiating'}">${c.renewalLikelihood}</span></td><td class="highlight-amber">${formatCurrency(c.estimatedCommission)}</td></tr>`).join('')}
+                ${pipeline.renewal.length>0?`<tr style="font-weight:700;border-top:2px solid var(--border);"><td colspan="4">Total Renewal Pipeline</td><td class="highlight-amber">${formatCurrency(pipeline.totalRenewal)}</td></tr>`:''}
+            </tbody></table></div></div>
+        </div>
+        <div class="card commission-highlight" style="margin-top:18px;"><div class="card-header"><h3><i class="fas fa-calculator"></i> Quick Commission Calculator</h3></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+                <div><label style="font-size:0.75rem;color:var(--text-secondary);">Monthly Rent ($)</label><input type="number" id="calcRent" value="15000" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);" oninput="updateCalc()"></div>
+                <div><label style="font-size:0.75rem;color:var(--text-secondary);">Monthly OPEX ($)</label><input type="number" id="calcOpex" value="3000" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);" oninput="updateCalc()"></div>
+                <div><label style="font-size:0.75rem;color:var(--text-secondary);">Rate (%)</label><input type="number" id="calcRate" value="${data.commissionDefaults.newLeaseRate}" step="0.5" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);" oninput="updateCalc()"></div>
+                <div><label style="font-size:0.75rem;color:var(--text-secondary);">Include OPEX</label><select id="calcOpexInc" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);" onchange="updateCalc()"><option value="no">No</option><option value="yes">Yes</option></select></div>
+                <div style="display:flex;align-items:flex-end;"><div style="width:100%;padding:8px;background:rgba(139,92,246,0.15);border-radius:6px;text-align:center;"><div style="font-size:0.7rem;color:var(--text-secondary);">ESTIMATED COMMISSION</div><div id="calcResult" style="font-size:1.3rem;font-weight:700;color:var(--purple);">$9,000</div></div></div>
+            </div>
+        </div>
+    `;
+    setTimeout(updateCalc, 50);
+}
+
+function updateCalc() {
+    const rent = parseInt(document.getElementById('calcRent')?.value) || 0;
+    const opex = parseInt(document.getElementById('calcOpex')?.value) || 0;
+    const rate = parseFloat(document.getElementById('calcRate')?.value) || 0;
+    const incOpex = document.getElementById('calcOpexInc')?.value === 'yes';
+    const annual = incOpex ? (rent+opex)*12 : rent*12;
+    const commission = Math.round(annual * rate / 100);
+    const resultEl = document.getElementById('calcResult');
+    if (resultEl) resultEl.textContent = formatCurrency(commission);
+}
+
+function renderReports() {
+    const occupied = data.properties.flatMap(p=>p.lots.filter(l=>l.currentTenant));
+    const totalRent = occupied.reduce((s,l)=>s+(l.currentTenant?.rentMonthly||0),0);
+    const totalOpex = occupied.reduce((s,l)=>s+(l.currentTenant?.opexMonthly||0),0);
+    const vacant = data.properties.flatMap(p=>p.lots.filter(l=>l.status==='vacant'||l.status==='negotiating'));
+    const pipeline = getCommissionPipeline();
+
+    mainContent.innerHTML = `
+        <h2 style="margin-bottom:16px;">Reports</h2>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle green"><i class="fas fa-dollar-sign"></i></div></div><div class="value">${formatCurrency(totalRent)}</div><div class="label">Monthly Rent Roll</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle amber"><i class="fas fa-file-invoice-dollar"></i></div></div><div class="value">${formatCurrency(totalOpex)}</div><div class="label">Monthly OPEX</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle purple"><i class="fas fa-chart-pie"></i></div></div><div class="value">${formatCurrency(totalRent+totalOpex)}</div><div class="label">Gross Monthly Income</div></div>
+            <div class="stat-card"><div class="icon-row"><div class="icon-circle teal"><i class="fas fa-building"></i></div></div><div class="value">${vacant.length}</div><div class="label">Vacant Units</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="dashboard-grid">
+            <div class="card"><h3 style="margin-bottom:12px;"><i class="fas fa-chart-bar"></i> Rent Roll by Property</h3><div style="height:250px;"><canvas id="rentChart"></canvas></div></div>
+            <div class="card"><h3 style="margin-bottom:12px;"><i class="fas fa-chart-pie"></i> Occupancy Distribution</h3><div style="height:250px;"><canvas id="occChart"></canvas></div></div>
+        </div>
+    `;
+    setTimeout(() => {
+        const props = data.properties;
+        const rc = document.getElementById('rentChart');
+        if (rc) new Chart(rc, {
+            type: 'bar',
+            data: { labels: props.map(p=>p.name), datasets: [{ label:'Monthly Rent ($)', data: props.map(p=>p.lots.filter(l=>l.currentTenant).reduce((s,l)=>s+(l.currentTenant?.rentMonthly||0),0)), backgroundColor:'rgba(59,130,246,0.5)', borderColor:'#3b82f6', borderWidth:1.5, borderRadius:6 }] },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#8fa3b8',font:{size:11}}}}, scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(31,50,70,0.4)'}},y:{ticks:{color:'#64748b',callback:v=>'$'+v.toLocaleString()},grid:{color:'rgba(31,50,70,0.4)'}}} }
+        });
+        const oc = document.getElementById('occChart');
+        if (oc) new Chart(oc, {
+            type: 'doughnut',
+            data: { labels: ['Occupied','Vacant','Negotiating'], datasets: [{ data: [occupied.length, vacant.filter(u=>u.status==='vacant').length, vacant.filter(u=>u.status==='negotiating').length], backgroundColor:['#10b981','#ef4444','#f59e0b'], borderColor:'#162231', borderWidth:2 }] },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{color:'#8fa3b8',font:{size:10},padding:15}}} }
+        });
+    }, 100);
+}
+
+function renderTasks() {
+    mainContent.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h2>Tasks</h2><button class="primary" onclick="openTaskModal()"><i class="fas fa-plus"></i> Add Task</button></div>
+        <div class="card">
+            ${data.tasks.map(t => `
+                <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.86rem;opacity:${t.done?'0.5':'1'};">
+                    <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask(${t.id})" style="accent-color:var(--accent);margin-top:3px;cursor:pointer;width:18px;height:18px;">
+                    <div style="flex:1;"><span style="${t.done?'text-decoration:line-through':''}">${t.title}</span><div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">${t.property} • ${t.lot} • Due: ${formatDate(t.due)}<span style="margin-left:8px;padding:2px 9px;border-radius:10px;font-size:0.65rem;font-weight:600;background:${t.priority==='Critical'?'rgba(239,68,68,0.3)':t.priority==='High'?'rgba(239,68,68,0.2)':t.priority==='Medium'?'rgba(245,158,11,0.2)':'rgba(148,163,184,0.15)'};color:${t.priority==='Critical'||t.priority==='High'?'var(--red)':t.priority==='Medium'?'var(--amber)':'var(--text-secondary)'}">${t.priority}</span></div></div>
+                    <button class="small danger" onclick="deleteTask(${t.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            `).join('')}
+            ${data.tasks.length===0 ? '<p style="color:var(--text-secondary);text-align:center;padding:20px;">No tasks yet. Add one!</p>' : ''}
+        </div>
+    `;
+}
+
+// ═══════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════
+function openPropertyModal(id) {
+    const prop = id ? getPropertyById(id) : null;
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>${prop?'Edit Property':'Add New Property'}</h3>
+        <label>Property Name</label><input id="pName" value="${prop?.name||''}" placeholder="e.g., Metro Tower">
+        <label>Address</label><input id="pAddr" value="${prop?.address||''}" placeholder="Full address">
+        <div class="form-row"><div><label>Type</label><select id="pType">${['Office','Retail','Industrial','Medical','Mixed-Use'].map(t=>`<option ${prop?.type===t?'selected':''}>${t}</option>`).join('')}</select></div><div><label>Total Sq Ft</label><input id="pSqFt" type="number" value="${prop?.totalSqFt||''}" placeholder="e.g., 25000"></div></div>
+        <div class="form-row"><div><label>Year Built</label><input id="pYear" type="number" value="${prop?.yearBuilt||''}" placeholder="e.g., 2015"></div><div>&nbsp;</div></div>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveProperty(${prop?.id||'null'})">Save Property</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveProperty(id) {
+    const name = document.getElementById('pName').value.trim();
+    if (!name) { alert('Property name required.'); return; }
+    const d = { name, address:document.getElementById('pAddr').value, type:document.getElementById('pType').value, totalSqFt:parseInt(document.getElementById('pSqFt').value)||0, yearBuilt:parseInt(document.getElementById('pYear').value)||2020 };
+    if (id) { const e = getPropertyById(id); if (e) Object.assign(e, d); }
+    else { const nid = Math.max(...data.properties.map(p=>p.id),0)+1; data.properties.push({ id:nid, ...d, lots:[] }); }
+    closeModal(); scheduleCloudSave(); renderPage('properties');
+}
+
+function openLotModal(propId) {
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>Add New Lot/Unit</h3>
+        <label>Lot/Unit Name</label><input id="lotName" placeholder="e.g., Suite 100, Unit A">
+        <div class="form-row"><div><label>Sq Ft</label><input id="lotSqFt" type="number" placeholder="e.g., 5000"></div><div><label>Floor</label><input id="lotFloor" type="number" value="1"></div></div>
+        <label>Status</label><select id="lotStatus"><option value="vacant">Vacant</option><option value="occupied">Occupied</option><option value="negotiating">Negotiating</option></select>
+        <label>Current Tenant (if occupied)</label><select id="lotTenant"><option value="">— None —</option>${data.clients.map(c=>`<option value="${c.id}">${c.company} (${c.contact})</option>`).join('')}</select>
+        <div id="leaseFields" style="display:none;"><div class="form-row-3"><div><label>Lease Start</label><input type="date" id="leaseStart"></div><div><label>Lease End</label><input type="date" id="leaseEnd"></div></div><div class="form-row"><div><label>Rent/Month ($)</label><input type="number" id="leaseRent" placeholder="e.g., 15000"></div><div><label>Opex/Month ($)</label><input type="number" id="leaseOpex" placeholder="e.g., 3000"></div></div></div>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveLot(${propId})">Add Lot</button></div>
+    `;
+    document.getElementById('lotStatus').addEventListener('change', function(){ document.getElementById('leaseFields').style.display = this.value==='occupied'?'block':'none'; });
+    document.getElementById('lotTenant').addEventListener('change', function(){ if(this.value)document.getElementById('lotStatus').value='occupied'; document.getElementById('leaseFields').style.display=document.getElementById('lotStatus').value==='occupied'?'block':'none'; });
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveLot(propId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const status = document.getElementById('lotStatus').value;
+    const tenantId = parseInt(document.getElementById('lotTenant').value)||null;
+    const nl = {
+        id: Math.max(...data.properties.flatMap(p=>p.lots.map(l=>l.id)),0)+1,
+        lotName: document.getElementById('lotName').value.trim(),
+        sqFt: parseInt(document.getElementById('lotSqFt').value)||0,
+        floor: parseInt(document.getElementById('lotFloor').value)||1,
+        status,
+        currentTenant: (status==='occupied'&&tenantId) ? { clientId:tenantId, leaseStart:document.getElementById('leaseStart').value, leaseEnd:document.getElementById('leaseEnd').value, rentMonthly:parseInt(document.getElementById('leaseRent').value)||0, opexMonthly:parseInt(document.getElementById('leaseOpex').value)||0, renewalLikelihood:'uncertain', renewalNotes:'' } : null,
+        potentialTenants: []
+    };
+    prop.lots.push(nl);
+    closeModal(); scheduleCloudSave(); viewProperty(propId);
+}
+
+function editLot(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot) return;
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>Edit Lot: ${lot.lotName}</h3>
+        <label>Lot Name</label><input id="lotName" value="${lot.lotName}">
+        <div class="form-row"><div><label>Sq Ft</label><input id="lotSqFt" type="number" value="${lot.sqFt}"></div><div><label>Floor</label><input id="lotFloor" type="number" value="${lot.floor}"></div></div>
+        <label>Status</label><select id="lotStatus"><option value="vacant" ${lot.status==='vacant'?'selected':''}>Vacant</option><option value="occupied" ${lot.status==='occupied'?'selected':''}>Occupied</option><option value="negotiating" ${lot.status==='negotiating'?'selected':''}>Negotiating</option></select>
+        <label>Current Tenant</label><select id="lotTenant"><option value="">— None —</option>${data.clients.map(c=>`<option value="${c.id}" ${lot.currentTenant?.clientId===c.id?'selected':''}>${c.company}</option>`).join('')}</select>
+        <div id="leaseFields" style="display:${lot.currentTenant?'block':'none'};"><div class="form-row-3"><div><label>Lease Start</label><input type="date" id="leaseStart" value="${lot.currentTenant?.leaseStart||''}"></div><div><label>Lease End</label><input type="date" id="leaseEnd" value="${lot.currentTenant?.leaseEnd||''}"></div></div><div class="form-row"><div><label>Rent/Month</label><input type="number" id="leaseRent" value="${lot.currentTenant?.rentMonthly||''}"></div><div><label>Opex/Month</label><input type="number" id="leaseOpex" value="${lot.currentTenant?.opexMonthly||''}"></div></div></div>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="danger" onclick="deleteLot(${propId},${lotId})">Delete Lot</button><button class="primary" onclick="updateLot(${propId},${lotId})">Save Changes</button></div>
+    `;
+    document.getElementById('lotStatus').addEventListener('change',function(){document.getElementById('leaseFields').style.display=this.value==='occupied'?'block':'none';});
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function updateLot(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot) return;
+    const status = document.getElementById('lotStatus').value;
+    const tenantId = parseInt(document.getElementById('lotTenant').value)||null;
+    lot.lotName = document.getElementById('lotName').value.trim();
+    lot.sqFt = parseInt(document.getElementById('lotSqFt').value)||0;
+    lot.floor = parseInt(document.getElementById('lotFloor').value)||1;
+    lot.status = status;
+    if (status==='occupied'&&tenantId) { lot.currentTenant = { clientId:tenantId, leaseStart:document.getElementById('leaseStart').value, leaseEnd:document.getElementById('leaseEnd').value, rentMonthly:parseInt(document.getElementById('leaseRent').value)||0, opexMonthly:parseInt(document.getElementById('leaseOpex').value)||0, renewalLikelihood:lot.currentTenant?.renewalLikelihood||'uncertain', renewalNotes:lot.currentTenant?.renewalNotes||'' }; }
+    else { lot.currentTenant = null; }
+    closeModal(); scheduleCloudSave(); viewProperty(propId);
+}
+
+function deleteLot(propId, lotId) {
+    if (!confirm('Delete this lot? This cannot be undone.')) return;
+    const prop = getPropertyById(propId); if(prop) prop.lots = prop.lots.filter(l=>l.id!==lotId);
+    closeModal(); scheduleCloudSave(); viewProperty(propId);
+}
+
+function openRenewalModal(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot||!lot.currentTenant) return;
+    const tenant = getClientById(lot.currentTenant.clientId);
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>Update Renewal Status: ${lot.lotName}</h3>
+        <p style="font-size:0.85rem;margin-bottom:12px;">Tenant: <strong>${tenant?.company||'Unknown'}</strong> • Lease ends: ${formatDate(lot.currentTenant.leaseEnd)}</p>
+        <label>Renewal Likelihood</label>
+        <select id="renewalLikelihood"><option value="likely" ${lot.currentTenant.renewalLikelihood==='likely'?'selected':''}>🟢 Likely</option><option value="negotiating" ${lot.currentTenant.renewalLikelihood==='negotiating'?'selected':''}>🟡 Negotiating</option><option value="uncertain" ${lot.currentTenant.renewalLikelihood==='uncertain'?'selected':''}>🟠 Uncertain</option><option value="unlikely" ${lot.currentTenant.renewalLikelihood==='unlikely'?'selected':''}>🔴 Unlikely</option></select>
+        <label>Notes</label><textarea id="renewalNotes">${lot.currentTenant.renewalNotes||''}</textarea>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveRenewalStatus(${propId},${lotId})">Save</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveRenewalStatus(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot||!lot.currentTenant) return;
+    lot.currentTenant.renewalLikelihood = document.getElementById('renewalLikelihood').value;
+    lot.currentTenant.renewalNotes = document.getElementById('renewalNotes').value;
+    closeModal(); scheduleCloudSave(); renderPage('expirations');
+}
+
+function markAsVacant(propId, lotId) {
+    if(!confirm('Mark this unit as vacant? This will remove the current tenant.')) return;
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot) return;
+    lot.status = 'vacant'; lot.currentTenant = null; lot.potentialTenants = [];
+    scheduleCloudSave(); renderPage('expirations'); showToast('Unit marked as vacant');
+}
+
+function findReplacement(propId, lotId) { assignPotentialTenant(propId, lotId); }
+
+function assignPotentialTenant(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot) return;
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>Assign Potential Tenants to ${lot.lotName}</h3>
+        <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:12px;">Select clients interested in this unit:</p>
+        ${data.clients.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;"><input type="checkbox" id="pt_${c.id}" ${(lot.potentialTenants||[]).includes(c.id)?'checked':''}><label style="margin:0;">${c.company} — ${c.contact} (${c.phone})</label></div>`).join('')}
+        <div class="btn-row" style="margin-top:14px;"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="savePotentialTenants(${propId},${lotId})">Save</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function savePotentialTenants(propId, lotId) {
+    const prop = getPropertyById(propId); if(!prop) return;
+    const lot = prop.lots.find(l=>l.id===lotId); if(!lot) return;
+    lot.potentialTenants = data.clients.filter(c=>document.getElementById('pt_'+c.id)?.checked).map(c=>c.id);
+    closeModal(); scheduleCloudSave(); viewProperty(propId);
+}
+
+function openClientModal(id) {
+    const c = id ? getClientById(id) : null;
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>${c?'Edit Client':'Add New Client'}</h3>
+        <div class="form-row"><div><label>Company</label><input id="cCompany" value="${c?.company||''}" placeholder="Company name"></div><div><label>Contact Person</label><input id="cContact" value="${c?.contact||''}" placeholder="Full name"></div></div>
+        <div class="form-row"><div><label>Email</label><input type="email" id="cEmail" value="${c?.email||''}" placeholder="email@company.com"></div><div><label>Phone</label><input id="cPhone" value="${c?.phone||''}" placeholder="+1-555-0000"></div></div>
+        <div class="form-row"><div><label>Telegram</label><input id="cTelegram" value="${c?.telegram||''}" placeholder="@username"></div><div><label>Notes</label><textarea id="cNotes" placeholder="Requirements, preferences...">${c?.notes||''}</textarea></div></div>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button>${c?`<button class="danger" onclick="deleteClient(${c.id})">Delete</button>`:''}<button class="primary" onclick="saveClient(${c?.id||'null'})">Save Client</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveClient(id) {
+    const company = document.getElementById('cCompany').value.trim();
+    if (!company) { alert('Company name required.'); return; }
+    const d = { company, contact:document.getElementById('cContact').value, email:document.getElementById('cEmail').value, phone:document.getElementById('cPhone').value, telegram:document.getElementById('cTelegram').value, notes:document.getElementById('cNotes').value };
+    if (id) { const e = getClientById(id); if(e) Object.assign(e, d); }
+    else { const nid = Math.max(...data.clients.map(c=>c.id),0)+1; data.clients.push({ id:nid, ...d }); }
+    closeModal(); scheduleCloudSave(); renderPage('clients');
+}
+
+function deleteClient(id) {
+    if(!confirm('Delete this client? All references will be removed.')) return;
+    data.properties.forEach(p=>p.lots.forEach(l=>{ if(l.currentTenant?.clientId===id) l.currentTenant=null; if(l.potentialTenants) l.potentialTenants = l.potentialTenants.filter(pt=>pt!==id); }));
+    data.clients = data.clients.filter(c=>c.id!==id);
+    closeModal(); scheduleCloudSave(); renderPage('clients');
+}
+
+function openTaskModal() {
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3>Add New Task</h3>
+        <label>Task Title</label><input id="tTitle" placeholder="e.g., Call property owner">
+        <div class="form-row"><div><label>Related Property</label><select id="tProp"><option value="">— Select —</option>${data.properties.map(p=>`<option>${p.name}</option>`).join('')}</select></div><div><label>Related Lot</label><input id="tLot" placeholder="e.g., Suite 400"></div></div>
+        <div class="form-row"><div><label>Priority</label><select id="tPriority"><option>High</option><option selected>Medium</option><option>Low</option><option>Critical</option></select></div><div><label>Due Date</label><input type="date" id="tDue"></div></div>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveTask()">Add Task</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveTask() {
+    const title = document.getElementById('tTitle').value.trim();
+    if(!title) { alert('Task title required.'); return; }
+    data.tasks.push({ id:Math.max(...data.tasks.map(t=>t.id),0)+1, title, property:document.getElementById('tProp').value, lot:document.getElementById('tLot').value, priority:document.getElementById('tPriority').value, due:document.getElementById('tDue').value, done:false, type:'manual' });
+    closeModal(); scheduleCloudSave(); renderPage('tasks');
+}
+
+function toggleTask(id) {
+    const t = data.tasks.find(tt=>tt.id===id); if(t) t.done = !t.done;
+    scheduleCloudSave(); renderPage('tasks');
+}
+
+function deleteTask(id) {
+    if(!confirm('Delete this task?')) return;
+    data.tasks = data.tasks.filter(t=>t.id!==id);
+    scheduleCloudSave(); renderPage('tasks');
+}
+
+function openCommissionSettingsModal() {
+    const mc = document.getElementById('modalContent');
+    mc.innerHTML = `
+        <h3><i class="fas fa-cog"></i> Commission Settings</h3>
+        <div class="form-row"><div><label>New Lease Rate (%)</label><input type="number" id="setNewRate" value="${data.commissionDefaults.newLeaseRate}" step="0.5" min="0" max="20"></div><div><label>Renewal Rate (%)</label><input type="number" id="setRenewalRate" value="${data.commissionDefaults.renewalRate}" step="0.5" min="0" max="20"></div></div>
+        <label>Include OPEX in Commission?</label><select id="setOpexIncluded"><option value="yes" ${data.commissionDefaults.opexIncluded?'selected':''}>Yes — Commission on Rent + OPEX</option><option value="no" ${!data.commissionDefaults.opexIncluded?'selected':''}>No — Commission on Rent Only</option></select>
+        <div class="btn-row"><button onclick="closeModal()">Cancel</button><button class="primary" onclick="saveCommissionSettings()">Save Settings</button></div>
+    `;
+    document.getElementById('modalOverlay').classList.add('show');
+}
+
+function saveCommissionSettings() {
+    data.commissionDefaults.newLeaseRate = parseFloat(document.getElementById('setNewRate').value)||5;
+    data.commissionDefaults.renewalRate = parseFloat(document.getElementById('setRenewalRate').value)||2.5;
+    data.commissionDefaults.opexIncluded = document.getElementById('setOpexIncluded').value==='yes';
+    closeModal(); scheduleCloudSave(); renderPage('commissions'); showToast('Commission settings updated!');
+}
+
+// ═══════════════════════════════════════
+// DATA MANAGEMENT
+// ═══════════════════════════════════════
+function exportData() {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `creflow-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('📥 Backup downloaded!');
+}
+
+function importData() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = e => {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                const imported = JSON.parse(ev.target.result);
+                if(imported.properties && imported.clients) {
+                    if(confirm('Restore backup? Current data will be replaced.')) {
+                        data = imported;
+                        scheduleCloudSave();
+                        updateCounts();
+                        renderDashboard();
+                        showToast('✅ Data restored & synced!');
+                    }
+                } else { alert('Invalid backup file.'); }
+            } catch(ex) { alert('Could not read file.'); }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+function resetAllData() {
+    if(!confirm('⚠️ Delete ALL data and reset to defaults? This cannot be undone.')) return;
+    data = getDefaultData();
+    scheduleCloudSave();
+    updateCounts();
+    renderDashboard();
+    showToast('Data reset to defaults');
+}
+
+// ═══════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════
+function closeModal(e) {
+    if(e && e.target !== document.getElementById('modalOverlay') && e.type !== 'click') return;
+    document.getElementById('modalOverlay').classList.remove('show');
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape') document.getElementById('modalOverlay').classList.remove('show'); });
+
+function showToast(msg) {
+    const existing = document.querySelector('.toast'); if(existing) existing.remove();
+    const toast = document.createElement('div'); toast.className = 'toast';
+    toast.style.cssText = 'position:fixed;bottom:30px;right:30px;background:var(--green);color:#000;padding:12px 24px;border-radius:8px;font-weight:600;z-index:9999;animation:fadeInOut 2.5s ease;font-family:inherit;';
+    toast.textContent = msg; document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+loadFromCloud();
+</script>
+</body>
+</html>
